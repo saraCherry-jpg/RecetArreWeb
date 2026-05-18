@@ -1,0 +1,3 @@
+curl -sSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --channel 10.0
+export PATH="$HOME/.dotnet:$PATH"
+dotnet publish RecetArreWeb.csproj -c Release -o release
