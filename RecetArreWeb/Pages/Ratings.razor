@@ -1,0 +1,231 @@
+﻿@page "/recetas/{RecetaId:int}/rating"
+@using System.Security.Claims
+@using RecetArreWeb.DTOs
+@attribute [Authorize]
+@inject IRatingService RatingService
+@inject IRecetaService RecetaService
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+
+<div class="container py-5">
+    <div class="row">
+        <div class="col-12">
+            <button class="btn btn-outline-secondary mb-4" @onclick="Volver">
+                ← Volver a recetas
+            </button>
+        </div>
+    </div>
+
+    @if (cargando)
+    {
+        <div class="text-center">
+            <div class="spinner-border text-primary"></div>
+            <p>Cargando...</p>
+        </div>
+    }
+    else
+    {
+        <div class="row justify-content-center">
+            <div class="col-md-8 col-lg-6">
+                <div class="card shadow">
+                    <div class="card-header bg-white text-center">
+                        <h3>@recetaTitulo</h3>
+                        <p class="text-muted">¿Qué te pareció esta receta?</p>
+                    </div>
+                    <div class="card-body text-center">
+                        <!-- Estrellas -->
+                        <div class="mb-4">
+                            @for (int i = 1; i <= 5; i++)
+                            {
+                                int estrella = i;
+                                <i class="bi @(calificacionSeleccionada >= estrella ? "bi-star-fill" : "bi-star")"
+                                   style="font-size: 4rem; cursor: pointer; color: @(calificacionSeleccionada >= estrella ? "#ffc107" : "#dee2e6"); margin: 0 5px;"
+                                   @onclick="() => Seleccionar(estrella)">
+                                </i>
+                            }
+                        </div>
+
+                        <p class="mb-4">
+                            @if (calificacionSeleccionada > 0)
+                            {
+                                <span>⭐ Has seleccionado @calificacionSeleccionada estrella(s)</span>
+                            }
+                            else
+                            {
+                                <span>👆 Haz clic en una estrella para calificar</span>
+                            }
+                        </p>
+
+                        <button class="btn btn-primary btn-lg px-5"
+                                disabled="@(calificacionSeleccionada == 0 || enviando)"
+                                @onclick="GuardarCalificacion">
+                            @if (enviando)
+                            {
+                                <span>Enviando...</span>
+                            }
+                            else if (yaCalifico)
+                            {
+                                <span>Actualizar Calificación</span>
+                            }
+                            else
+                            {
+                                <span>Enviar Calificación</span>
+                            }
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Promedio de calificaciones -->
+                @if (promedioRating != null && promedioRating.TotalCalificaciones > 0)
+                {
+                    <div class="card mt-4 shadow">
+                        <div class="card-body text-center">
+                            <h5>Promedio de la comunidad</h5>
+                            <div class="display-4 text-warning">⭐ @promedioRating.Promedio.ToString("F1")</div>
+                            <p class="text-muted">Basado en @promedioRating.TotalCalificaciones calificación(es)</p>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(mensajeError))
+    {
+        <div class="alert alert-danger mt-3">@mensajeError</div>
+    }
+
+    @if (!string.IsNullOrEmpty(mensajeExito))
+    {
+        <div class="alert alert-success mt-3">@mensajeExito</div>
+    }
+</div>
+
+@code {
+    [Parameter] public int RecetaId { get; set; }
+
+    private string recetaTitulo = "";
+    private int calificacionSeleccionada = 0;
+    private bool cargando = true;
+    private bool enviando = false;
+    private bool yaCalifico = false;
+    private string? mensajeError;
+    private string? mensajeExito;
+    private RatingPromedioDto? promedioRating;
+    private RatingDto? calificacionActual;
+    private string? usuarioId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarDatos();
+        cargando = false;
+    }
+
+    private async Task CargarDatos()
+    {
+        try
+        {
+            // Obtener usuario actual
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            usuarioId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? user.FindFirst("sub")?.Value;
+
+            if (string.IsNullOrEmpty(usuarioId))
+            {
+                mensajeError = "No se pudo identificar al usuario";
+                return;
+            }
+
+            // Obtener título de la receta
+            var receta = await RecetaService.ObtenerPorId(RecetaId);
+            recetaTitulo = receta?.Titulo ?? "Receta";
+
+            // Obtener promedio
+            promedioRating = await RatingService.ObtenerPromedioPorReceta(RecetaId);
+
+            // Verificar si ya calificó
+            var ratingsUsuario = await RatingService.ObtenerPorUsuario(usuarioId);
+            calificacionActual = ratingsUsuario?.FirstOrDefault(r => r.RecetaId == RecetaId);
+
+            if (calificacionActual != null)
+            {
+                yaCalifico = true;
+                calificacionSeleccionada = calificacionActual.Calificacion;
+            }
+        }
+        catch (Exception ex)
+        {
+            mensajeError = $"Error: {ex.Message}";
+        }
+    }
+
+    private void Seleccionar(int estrellas)
+    {
+        calificacionSeleccionada = estrellas;
+    }
+
+    private async Task GuardarCalificacion()
+    {
+        enviando = true;
+        mensajeError = null;
+        mensajeExito = null;
+
+        try
+        {
+            if (yaCalifico && calificacionActual != null)
+            {
+                // Actualizar
+                var modificacion = new RatingModificacionDto { Calificacion = calificacionSeleccionada };
+                var resultado = await RatingService.Actualizar(calificacionActual.Id, modificacion);
+
+                if (resultado)
+                {
+                    mensajeExito = "¡Calificación actualizada!";
+                    promedioRating = await RatingService.ObtenerPromedioPorReceta(RecetaId);
+                }
+                else
+                {
+                    mensajeError = "No se pudo actualizar";
+                }
+            }
+            else
+            {
+                // Crear nueva
+                var nuevoRating = new RatingCreacionDto
+                {
+                    Calificacion = calificacionSeleccionada,
+                    RecetaId = RecetaId,
+                    UsuarioId = usuarioId!
+                };
+
+                var resultado = await RatingService.Crear(nuevoRating);
+
+                if (resultado != null)
+                {
+                    mensajeExito = "¡Gracias por calificar!";
+                    yaCalifico = true;
+                    calificacionActual = resultado;
+                    promedioRating = await RatingService.ObtenerPromedioPorReceta(RecetaId);
+                }
+                else
+                {
+                    mensajeError = "No se pudo guardar la calificación";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            mensajeError = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            enviando = false;
+            StateHasChanged();
+        }
+    }
+
+    private void Volver()
+    {
+        Navigation.NavigateTo("/recetas");
+    }
+}

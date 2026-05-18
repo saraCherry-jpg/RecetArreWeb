@@ -1,0 +1,225 @@
+@page "/recetas"
+@attribute [Authorize]
+@inject IRecetaService recetaService
+@inject ICategoriaService categoriaService
+@inject NavigationManager navigation
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Recetas</PageTitle>
+
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h3 text-brand mb-1">Mis Recetas</h1>
+                    <p class="text-muted mb-0">Descubre y gestiona tus recetas favoritas</p>
+                </div>
+                <button class="btn btn-brand" @onclick="IrACrear">
+                    <span class="bi bi-plus-circle me-1"></span> Nueva Receta
+                </button>
+            </div>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(mensajeExito))
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            @mensajeExito
+            <button type="button" class="btn-close" @onclick="() => mensajeExito = string.Empty"></button>
+        </div>
+    }
+    @if (!string.IsNullOrEmpty(mensajeError))
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            @mensajeError
+            <button type="button" class="btn-close" @onclick="() => mensajeError = string.Empty"></button>
+        </div>
+    }
+
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-12 col-md-5 col-lg-4">
+                            <input type="text" class="form-control" placeholder="Buscar receta..."
+                                   @bind="busqueda" @bind:event="oninput" />
+                        </div>
+                        <div class="col-12 col-md-4 col-lg-3">
+                            <select class="form-select" @bind="categoriaFiltro">
+                                <option value="0">Todas las categorías</option>
+                                @if (categorias != null)
+                                {
+                                    @foreach (var cat in categorias)
+                                    {
+                                        <option value="@cat.Id">@cat.Nombre</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-3 col-lg-2">
+                            <button class="btn btn-outline-secondary w-100" @onclick="LimpiarFiltros">
+                                Limpiar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        @if (recetas == null)
+        {
+            <div class="col-12 text-center py-5">
+                <div class="spinner-border text-brand" role="status">
+                    <span class="visually-hidden">Cargando...</span>
+                </div>
+                <p class="text-muted mt-3">Cargando recetas...</p>
+            </div>
+        }
+        else if (!RecetasFiltradas.Any())
+        {
+            <div class="col-12">
+                <div class="alert alert-info">
+                    <h5 class="alert-heading">No hay recetas</h5>
+                    <p class="mb-0">Comienza creando tu primera receta.</p>
+                </div>
+            </div>
+        }
+        else
+        {
+            @foreach (var receta in RecetasFiltradas)
+            {
+                <div class="col-12 col-sm-6 col-lg-4 col-xl-3 mb-4">
+                    <div class="card h-100 border-0 shadow-sm">
+                        <div class="card-body d-flex flex-column">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <h5 class="card-title text-brand mb-0 me-2">@receta.Titulo</h5>
+                                @if (receta.EstaPublicado)
+                                {
+                                    <span class="badge bg-success">Publicado</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-secondary">Borrador</span>
+                                }
+                            </div>
+
+                            <p class="card-text text-muted small flex-grow-1">
+                                @(string.IsNullOrEmpty(receta.Descripcion) ? "Sin descripción" : (receta.Descripcion.Length > 100 ? receta.Descripcion[..100] + "..." : receta.Descripcion))
+                            </p>
+
+                            <div class="d-flex gap-3 text-muted small mb-3">
+                                <span><span class="bi bi-clock me-1"></span>@(receta.TiempoPreparacionMinutos + receta.TiempoCoccionMinutos) min</span>
+                                <span><span class="bi bi-people me-1"></span>@receta.Porciones porc.</span>
+                            </div>
+
+                            <!-- Aquí están los botones modificados - AGREGADO EL DE CALIFICAR -->
+                            <div class="d-flex gap-2 mt-auto">
+                                <button class="btn btn-sm btn-brand flex-grow-1"
+                                        @onclick="() => IrADetalle(receta.Id)">
+                                    Ver
+                                </button>
+                                <button class="btn btn-sm btn-outline-primary"
+                                        @onclick="() => IrAEditar(receta.Id)">
+                                    <span class="bi bi-pencil"></span>
+                                </button>
+                                <!-- BOTÓN DE CALIFICAR - ESTRELLA AMARILLA -->
+                                <button class="btn btn-sm btn-warning"
+                                        @onclick="() => CalificarReceta(receta.Id)"
+                                        title="Calificar esta receta">
+                                    <span class="bi bi-star-fill"></span>
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger"
+                                        @onclick="() => EliminarReceta(receta.Id)">
+                                    <span class="bi bi-trash"></span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    private List<RecetaDto>? recetas;
+    private List<CategoriaDto>? categorias;
+    private string busqueda = "";
+    private int categoriaFiltro = 0;
+    private string mensajeExito = string.Empty;
+    private string mensajeError = string.Empty;
+
+    private IEnumerable<RecetaDto> RecetasFiltradas
+    {
+        get
+        {
+            if (recetas == null) return Enumerable.Empty<RecetaDto>();
+
+            var resultado = recetas.AsEnumerable();
+
+            if (!string.IsNullOrWhiteSpace(busqueda))
+            {
+                resultado = resultado.Where(r =>
+                    r.Titulo.Contains(busqueda, StringComparison.OrdinalIgnoreCase) ||
+                    (r.Descripcion?.Contains(busqueda, StringComparison.OrdinalIgnoreCase) ?? false));
+            }
+
+            if (categoriaFiltro > 0)
+            {
+                resultado = resultado.Where(r => r.CategoriaIds.Contains(categoriaFiltro));
+            }
+
+            return resultado;
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var tareaRecetas = recetaService.ObtenerTodas();
+        var tareaCategorias = categoriaService.ObtenerTodas();
+        await Task.WhenAll(tareaRecetas, tareaCategorias);
+        recetas = tareaRecetas.Result;
+        categorias = tareaCategorias.Result;
+    }
+
+    private async Task EliminarReceta(int id)
+    {
+        if (!await JSRuntime.InvokeAsync<bool>("confirm", "¿Estás seguro de eliminar esta receta?"))
+            return;
+
+        mensajeError = string.Empty;
+        mensajeExito = string.Empty;
+
+        var resultado = await recetaService.Eliminar(id);
+
+        if (resultado)
+        {
+            mensajeExito = "Receta eliminada exitosamente";
+            recetas = await recetaService.ObtenerTodas();
+        }
+        else
+        {
+            mensajeError = "No se pudo eliminar la receta";
+        }
+    }
+
+    // NUEVO MÉTODO PARA CALIFICAR
+    private void CalificarReceta(int id)
+    {
+        navigation.NavigateTo($"/recetas/{id}/rating");
+    }
+
+    private void IrACrear() => navigation.NavigateTo("/recetas/crear");
+    private void IrADetalle(int id) => navigation.NavigateTo($"/recetas/{id}");
+    private void IrAEditar(int id) => navigation.NavigateTo($"/recetas/editar/{id}");
+
+    private void LimpiarFiltros()
+    {
+        busqueda = "";
+        categoriaFiltro = 0;
+    }
+}

@@ -1,0 +1,111 @@
+@page "/login"
+@inject IAuthService authService
+@inject NavigationManager navigation
+@inject AuthenticationStateProvider authStateProvider
+
+<PageTitle>Login</PageTitle>
+
+<div class="login-page">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-12 col-sm-10 col-md-7 col-lg-5">
+                <div class="card shadow border-0 login-card">
+                    <div class="card-body p-4">
+                        <div class="text-center mb-4">
+                            <div class="login-logo bg-brand text-white rounded-circle d-inline-flex align-items-center justify-content-center mb-3">
+                                <span class="fw-bold">RA</span>
+                            </div>
+                            <h2 class="h4 text-brand mb-1">Bienvenido</h2>
+                            <p class="text-muted mb-0">Inicia sesión para continuar</p>
+                        </div>
+
+                        @if (!string.IsNullOrEmpty(mensajeError))
+                        {
+                            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                                <strong>Error:</strong> @mensajeError
+                                <button type="button" class="btn-close" @onclick="() => mensajeError = string.Empty"></button>
+                            </div>
+                        }
+
+                        <EditForm Model="credenciales" OnValidSubmit="HandleLogin">
+                            <DataAnnotationsValidator />
+
+                            <div class="mb-3">
+                                <label class="form-label">Correo electrónico</label>
+                                <InputText @bind-Value="credenciales.Email" 
+                                           class="form-control" 
+                                           placeholder="nombre@correo.com" />
+                                <ValidationMessage For="@(() => credenciales.Email)" />
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label d-flex justify-content-between">
+                                    <span>Contraseña</span>
+                                </label>
+                                <InputText type="password" 
+                                           @bind-Value="credenciales.Password" 
+                                           class="form-control" 
+                                           placeholder="••••••••" />
+                                <ValidationMessage For="@(() => credenciales.Password)" />
+                            </div>
+
+                            <button type="submit" class="btn btn-brand w-100" disabled="@cargando">
+                                @if (cargando)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2"></span>
+                                }
+                                Entrar
+                            </button>
+                        </EditForm>
+
+                        <div class="text-center mt-3">
+                            <span class="text-muted">¿No tienes cuenta?</span>
+                            <a class="link-brand fw-semibold ms-1" href="/registro">Regístrate</a>
+                        </div>
+                    </div>
+                </div>
+
+                <p class="text-center text-muted small mt-3 mb-0">Acceso seguro para tu cuenta</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private CredencialesUsuario credenciales = new();
+    private bool cargando = false;
+    private string mensajeError = string.Empty;
+
+    private async Task HandleLogin()
+    {
+        cargando = true;
+        mensajeError = string.Empty;
+
+        try
+        {
+            var respuesta = await authService.Login(credenciales);
+
+            if (respuesta != null)
+            {
+                // Notificar al AuthStateProvider que el usuario inició sesión
+                var authProvider = (AuthStateProvider)authStateProvider;
+                authProvider.NotificarLogin(respuesta.Token);
+
+                // Redirigir a la página principal
+                navigation.NavigateTo("/");
+            }
+            else
+            {
+                mensajeError = "Credenciales incorrectas. Por favor verifica tu email y contraseña.";
+            }
+        }
+        catch (Exception ex)
+        {
+            mensajeError = $"Error al iniciar sesión: {ex.Message}";
+        }
+        finally
+        {
+            cargando = false;
+        }
+    }
+}
