@@ -122,16 +122,29 @@
                                         @onclick="() => IrADetalle(receta.Id)">
                                     Ver
                                 </button>
+
+
                                 <button class="btn btn-sm btn-outline-primary"
                                         @onclick="() => IrAEditar(receta.Id)">
                                     <span class="bi bi-pencil"></span>
                                 </button>
+
                                 <!-- BOTÓN DE CALIFICAR - ESTRELLA AMARILLA -->
                                 <button class="btn btn-sm btn-warning"
                                         @onclick="() => CalificarReceta(receta.Id)"
                                         title="Calificar esta receta">
                                     <span class="bi bi-star-fill"></span>
                                 </button>
+
+
+                                <!-- BOTÓN DE RANKINGS (comentarios destacados) -->
+                                <button class="btn btn-sm btn-info" 
+                                    @onclick="() => VerRankings(receta.Id)" 
+                                    title="Ver comentarios destacados">
+                                    <span class="bi bi-chat-dots"></span>
+                                </button>
+
+
                                 <button class="btn btn-sm btn-outline-danger"
                                         @onclick="() => EliminarReceta(receta.Id)">
                                     <span class="bi bi-trash"></span>
@@ -177,6 +190,7 @@
         }
     }
 
+    //BLOQUES 
     protected override async Task OnInitializedAsync()
     {
         var tareaRecetas = recetaService.ObtenerTodas();
@@ -221,5 +235,12 @@
     {
         busqueda = "";
         categoriaFiltro = 0;
+    }
+
+
+    //PARA VER RANKINGS 
+    private void VerRankings(int id)
+    {
+        navigation.NavigateTo($"/recetas/{id}/rankings");
     }
 }

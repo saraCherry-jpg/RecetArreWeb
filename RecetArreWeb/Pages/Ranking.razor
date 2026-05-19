@@ -1,0 +1,135 @@
+﻿@page "/recetas/{RecetaId:int}/Rankings"
+@using RecetArreWeb.DTOs
+@inject IRankingService rankingService
+@inject IRecetaService recetaService
+@inject NavigationManager Navigation
+
+
+<h3>Rankings de la receta</h3>
+
+@if (cargando)
+{
+    <p>Cargando...</p>
+}
+else
+{
+    <div class="mb-4">
+        <h4>@tituloReceta</h4>
+        <button class="btn btn-primary" @onclick="MostrarFormulario">Agregar comentario destacado</button>
+    </div>
+
+    @if (mensajeError != null)
+    {
+        <div class="alert alert-danger">@mensajeError</div>
+    }
+
+    @if (mostrarForm)
+    {
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5>Nuevo ranking</h5>
+                <textarea @bind="nuevoComentario" class="form-control" rows="3" placeholder="Escribe tu comentario (máx 500 caracteres)..."></textarea>
+                <div class="mt-2">
+                    <button class="btn btn-success" @onclick="GuardarRanking" disabled="@string.IsNullOrWhiteSpace(nuevoComentario)">Guardar</button>
+                    <button class="btn btn-secondary" @onclick="() => mostrarForm = false">Cancelar</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (rankings.Count == 0)
+    {
+        <p>No hay rankings para esta receta. ¡Sé el primero en comentar!</p>
+    }
+    else
+    {
+        <div class="list-group">
+            @foreach (var rank in rankings)
+            {
+                <div class="list-group-item">
+                    <div class="d-flex justify-content-between">
+                        <p class="mb-1">@rank.ComentariosRanking</p>
+                        <small class="text-muted">@rank.CreadoUtc.ToString("dd/MM/yyyy HH:mm")</small>
+                    </div>
+                    @* Solo mostrar botón eliminar si el usuario tiene permisos (opcional) *@
+                    <button class="btn btn-sm btn-outline-danger mt-2" @onclick="() => EliminarRanking(rank.Id)">Eliminar</button>
+                </div>
+            }
+        </div>
+    }
+}
+
+@code {
+    [Parameter] public int recetaId { get; set; }
+
+    private List<RankingDto> rankings = new();
+    private string? tituloReceta;
+    private bool cargando = true;
+    private string? mensajeError;
+    private bool mostrarForm = false;
+    private string nuevoComentario = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarDatos();
+        cargando = false;
+    }
+
+    private async Task CargarDatos()
+    {
+        try
+        {
+            // Obtener título de la receta (asumiendo que tienes RecetaService)
+            var receta = await recetaService.ObtenerPorId(recetaId);
+            tituloReceta = receta?.Titulo ?? "Receta no encontrada";
+
+            // Obtener rankings de esta receta
+            rankings = await rankingService.ObtenerPorReceta(recetaId);
+        }
+        catch (Exception ex)
+        {
+            mensajeError = $"Error al cargar datos: {ex.Message}";
+        }
+    }
+
+    private void MostrarFormulario() => mostrarForm = true;
+
+    private async Task GuardarRanking()
+    {
+        if (string.IsNullOrWhiteSpace(nuevoComentario)) return;
+
+        var nuevo = new RankingCreacionDto
+        {
+            ComentariosRanking = nuevoComentario,
+            RecetaId = recetaId
+        };
+
+        var resultado = await rankingService.Crear(nuevo);
+        if (resultado != null)
+        {
+            // Refrescar lista
+            rankings = await rankingService.ObtenerPorReceta(recetaId);
+            nuevoComentario = "";
+            mostrarForm = false;
+            StateHasChanged();
+        }
+        else
+        {
+            mensajeError = "No se pudo guardar el ranking";
+        }
+    }
+
+    private async Task EliminarRanking(int id)
+    {
+        var ok = await rankingService.Eliminar(id);
+        if (ok)
+        {
+            rankings = await rankingService.ObtenerPorReceta(recetaId);
+            StateHasChanged();
+        }
+        else
+        {
+            mensajeError = "Error al eliminar el ranking";
+        }
+    }
+}

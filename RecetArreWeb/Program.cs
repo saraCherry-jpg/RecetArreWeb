@@ -34,6 +34,7 @@ builder.Services.AddScoped<ICategoriaService, CategoriaService>();
 builder.Services.AddScoped<IIngredienteService, IngredienteService>();
 builder.Services.AddScoped<IRecetaService, RecetaService>();
 builder.Services.AddScoped<IComentarioService, ComentarioService>();
+builder.Services.AddScoped<IRankingService, RankingService>(); //Se agrego en el Ranking
 
 // Configurar autenticación
 builder.Services.AddAuthorizationCore();
